@@ -18,6 +18,7 @@ import 'payments_page.dart';
 import 'accidents_page.dart';
 import 'history_page.dart';
 import 'logs_page.dart';
+import 'password_management_page.dart';
 import 'login_page.dart';
 
 class HomeDashboardPage extends StatefulWidget {
@@ -111,6 +112,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
       _NavItem('Kaza', Icons.warning, const AccidentsPage()),
       _NavItem('Gecmis', Icons.history, const HistoryPage()),
       _NavItem('Loglar', Icons.list_alt, const LogsPage()),
+      _NavItem('Sifre Yonetimi', Icons.vpn_key, const PasswordManagementPage()),
     ];
   }
 
@@ -243,6 +245,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
               _tile(Icons.warning, 'Kaza', 'Kaza kayitlari', 12),
               _tile(Icons.history, 'Gecmis', 'Kiralama gecmisi', 13),
               _tile(Icons.list_alt, 'Loglar', 'Sistem loglari', 14),
+              _tile(Icons.vpn_key, 'Sifre Yonetimi', 'Sifre degistirme', 15),
             ],
           ),
         ],
