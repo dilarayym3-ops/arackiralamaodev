@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../data/repositories/employee_repository.dart';
 import '../../../models/session.dart';
+import '../../../services/password_service.dart';
 
 class EmployeesPage extends StatefulWidget { const EmployeesPage({super.key}); @override State<EmployeesPage> createState() => _EmployeesPageState(); }
 class _EmployeesPageState extends State<EmployeesPage> {
@@ -39,6 +40,14 @@ class _EmployeesPageState extends State<EmployeesPage> {
   }
 
   Future<void> _create() async {
+    // Şifre 2 kontrolü
+    final hasAccess = await PasswordService.showPasswordDialog(
+      context: context,
+      level: 2,
+      title: 'Çalışan Eklemek İçin Şifre 2 Gerekli',
+    );
+    if (!hasAccess) return;
+
     try {
       await _repo.create(
         subeId: Session().current!.subeId,
@@ -57,6 +66,15 @@ class _EmployeesPageState extends State<EmployeesPage> {
 
   Future<void> _update() async {
     if (_selected == null) return;
+    
+    // Şifre 2 kontrolü
+    final hasAccess = await PasswordService.showPasswordDialog(
+      context: context,
+      level: 2,
+      title: 'Çalışan Güncellemek İçin Şifre 2 Gerekli',
+    );
+    if (!hasAccess) return;
+
     try {
       await _repo.update(
         calisanId: _selected!['CALISAN_ID'] as int,
@@ -72,6 +90,15 @@ class _EmployeesPageState extends State<EmployeesPage> {
 
   Future<void> _delete() async {
     if (_selected == null) return;
+    
+    // Şifre 2 kontrolü
+    final hasAccess = await PasswordService.showPasswordDialog(
+      context: context,
+      level: 2,
+      title: 'Çalışan Silmek İçin Şifre 2 Gerekli',
+    );
+    if (!hasAccess) return;
+
     try {
       await _repo.delete(_selected!['CALISAN_ID'] as int);
       await _load();

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../data/repositories/sube_repository.dart';
+import '../../../services/password_service.dart';
 
 class BranchesPage extends StatefulWidget {
   const BranchesPage({super.key});
@@ -61,6 +62,14 @@ class _BranchesPageState extends State<BranchesPage> {
   void _clear() { setState(() => _selected = null); fAdi.clear(); fAdres.clear(); fTel.clear(); fIl.clear(); fIlce.clear(); }
 
   Future<void> _create() async {
+    // Şifre 2 kontrolü
+    final hasAccess = await PasswordService.showPasswordDialog(
+      context: context,
+      level: 2,
+      title: 'Şube Eklemek İçin Şifre 2 Gerekli',
+    );
+    if (!hasAccess) return;
+
     try {
       await _repo.create(
         subeAdi: fAdi.text.trim(),
@@ -76,6 +85,15 @@ class _BranchesPageState extends State<BranchesPage> {
 
   Future<void> _update() async {
     if (_selected == null) return;
+    
+    // Şifre 2 kontrolü
+    final hasAccess = await PasswordService.showPasswordDialog(
+      context: context,
+      level: 2,
+      title: 'Şube Güncellemek İçin Şifre 2 Gerekli',
+    );
+    if (!hasAccess) return;
+
     try {
       await _repo.update(
         subeId: _selected!['SUBE_ID'] as int,
@@ -92,6 +110,15 @@ class _BranchesPageState extends State<BranchesPage> {
 
   Future<void> _delete() async {
     if (_selected == null) return;
+    
+    // Şifre 2 kontrolü
+    final hasAccess = await PasswordService.showPasswordDialog(
+      context: context,
+      level: 2,
+      title: 'Şube Silmek İçin Şifre 2 Gerekli',
+    );
+    if (!hasAccess) return;
+
     try {
       await _repo.delete(_selected!['SUBE_ID'] as int);
       _clear(); await _load();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../data/repositories/logs_repository.dart';
 import '../../../models/session.dart';
+import '../../../services/password_service.dart';
 
 class LogsPage extends StatefulWidget { const LogsPage({super.key}); @override State<LogsPage> createState() => _LogsPageState(); }
 class _LogsPageState extends State<LogsPage> {
@@ -9,6 +10,19 @@ class _LogsPageState extends State<LogsPage> {
   List<Map<String, dynamic>> _items = [];
   Map<String, dynamic>? _selected;
   String? _error; bool _loading = false;
+  bool _hasAccess = false;
+
+  Future<void> _checkAccess() async {
+    final hasAccess = await PasswordService.showPasswordDialog(
+      context: context,
+      level: 1,
+      title: 'Logları Görüntülemek İçin Şifre 1 Gerekli',
+    );
+    setState(() => _hasAccess = hasAccess);
+    if (hasAccess) {
+      await _load();
+    }
+  }
 
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; _selected = null; _items = []; });
@@ -16,10 +30,26 @@ class _LogsPageState extends State<LogsPage> {
     catch (e) { _error = e.toString(); } finally { setState(() => _loading = false); }
   }
 
-  @override void initState() { super.initState(); _load(); }
+  @override void initState() { 
+    super.initState(); 
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkAccess());
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (!_hasAccess) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.lock, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('Logları görüntülemek için şifre gerekli', style: TextStyle(fontSize: 16, color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+
     return Row(children: [
       Expanded(flex: 2, child: Column(children: [
         Padding(padding: const EdgeInsets.all(12), child: Row(children: [

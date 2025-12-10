@@ -5,6 +5,7 @@ import '../../../data/repositories/rental_repository.dart' as rent;
 import '../../../data/repositories/payment_repository.dart' as pay;
 import '../../../models/session.dart';
 import '../../../widgets/search_select_dialog.dart';
+import '../../../widgets/payment_type_dialog.dart';
 import '../../../models/ui_router.dart';
 
 class FinesPage extends StatefulWidget {
@@ -149,11 +150,20 @@ class _FinesPageState extends State<FinesPage> {
       return;
     }
     
+    // Ödeme tipi seç
+    final paymentType = await PaymentTypeDialog.show(
+      context: context,
+      title: 'Ödeme Tipi Seçin',
+      message: 'Kalan tutar: ${kalan.toStringAsFixed(2)} TL',
+    );
+    
+    if (paymentType == null) return; // İptal edildi
+    
     // Kalan tutarı ödeme olarak ekle
     try {
-      await _payRepo. add(cezaId: cezaId, tutar: kalan, tur: 'Ceza', tipi: 'Nakit');
+      await _payRepo.add(cezaId: cezaId, tutar: kalan, tur: 'Ceza', tipi: paymentType);
       await _load();
-      _sn('Ceza için ${kalan.toStringAsFixed(2)} TL ödeme eklendi');
+      _sn('Ceza için ${kalan.toStringAsFixed(2)} TL ödeme eklendi ($paymentType)');
     } catch (e) {
       _err(e);
     }
