@@ -1,7 +1,9 @@
 import '../db/mssql_service.dart';
+import 'logs_repository.dart';
 
 class CustomerRepository {
   final _db = MssqlService();
+  final _logs = LogsRepository();
 
   Future<List<Map<String, dynamic>>> listAll({String? q}) async {
     final s = q?.replaceAll("'", "''");

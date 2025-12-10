@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../data/repositories/payment_repository.dart' as pay;
 import '../../../data/repositories/rental_repository.dart' as rent;
+import '../../../widgets/payment_type_dialog.dart';
 import '../../../models/session.dart';
 
 class PaymentsPage extends StatefulWidget { const PaymentsPage({super.key}); @override State<PaymentsPage> createState() => _PaymentsPageState(); }
@@ -54,15 +55,88 @@ class _PaymentsPageState extends State<PaymentsPage> {
     setState(() {});
   }
 
-  // ödenmiş/ödenmemiş belirgin rozet
+  // ödenmiş/ödenmemiş belirgin rozet - PAY_STATUS sütununu kullan
   String _payStatus(Map<String, dynamic> m) {
-    // burada basitçe "Kampanya/Diğer" tipleri için "Bekleyen" gibi düşünebiliriz;
-    // kesin hesaplama gerektiriyorsa kiralama/sigorta/bakım ceza tutarlarına göre ayrıştırma yapılır.
-    final tip = (m['ODEME_TIPI'] ?? '') as String;
-    if (tip.toLowerCase() == 'kampanya' || tip.toLowerCase() == 'diğer' || tip.toLowerCase() == 'diger') return 'Bekleyen';
-    return 'Ödenmiş';
+    return (m['PAY_STATUS'] ?? 'Yok') as String;
   }
-  Color _statusColor(String s) => s == 'Bekleyen' ? Colors.orange : Colors.green;
+  
+  Color _statusColor(String s) {
+    switch (s) {
+      case 'Ödendi':
+        return const Color(0xFF4CAF50); // Yeşil
+      case 'Kısmi':
+        return const Color(0xFFFF9800); // Turuncu
+      default:
+        return const Color(0xFFF44336); // Kırmızı
+    }
+  }
+  
+  IconData _statusIcon(String s) {
+    switch (s) {
+      case 'Ödendi':
+        return Icons.check_circle;
+      case 'Kısmi':
+        return Icons.hourglass_bottom;
+      default:
+        return Icons.cancel;
+    }
+  }
+
+  Future<void> _makePayment(Map<String, dynamic> m) async {
+    // Ödenmemiş veya kısmi ödenmiş kayıt için ödeme yap
+    final paymentType = await PaymentTypeDialog.show(
+      context: context,
+      title: 'Ödeme Tipi Seçin',
+    );
+    
+    if (paymentType == null) return; // İptal edildi
+    
+    // Kalanı hesapla ve ödeme yap
+    final cezaId = m['CEZA_ID'] as int?;
+    final sigortaId = m['SIGORTA_ID'] as int?;
+    final bakimId = m['BAKIM_ID'] as int?;
+    final kazaId = m['KAZA_ID'] as int?;
+    
+    try {
+      // İlgili türe göre ödeme ekle
+      if (cezaId != null) {
+        final totalTarget = (m['TOTAL_TARGET'] as num?)?.toDouble() ?? 0.0;
+        final totalPaid = (m['TOTAL_PAID'] as num?)?.toDouble() ?? 0.0;
+        final kalan = totalTarget - totalPaid;
+        if (kalan > 0) {
+          await _repo.add(cezaId: cezaId, tutar: kalan, tur: 'Ceza', tipi: paymentType);
+          _sn('Ceza için ${kalan.toStringAsFixed(2)} TL ödeme eklendi ($paymentType)');
+        }
+      } else if (sigortaId != null) {
+        final totalTarget = (m['TOTAL_TARGET'] as num?)?.toDouble() ?? 0.0;
+        final totalPaid = (m['TOTAL_PAID'] as num?)?.toDouble() ?? 0.0;
+        final kalan = totalTarget - totalPaid;
+        if (kalan > 0) {
+          await _repo.add(sigortaId: sigortaId, tutar: kalan, tur: 'Sigorta', tipi: paymentType);
+          _sn('Sigorta için ${kalan.toStringAsFixed(2)} TL ödeme eklendi ($paymentType)');
+        }
+      } else if (bakimId != null) {
+        final totalTarget = (m['TOTAL_TARGET'] as num?)?.toDouble() ?? 0.0;
+        final totalPaid = (m['TOTAL_PAID'] as num?)?.toDouble() ?? 0.0;
+        final kalan = totalTarget - totalPaid;
+        if (kalan > 0) {
+          await _repo.add(bakimId: bakimId, tutar: kalan, tur: 'Bakım', tipi: paymentType);
+          _sn('Bakım için ${kalan.toStringAsFixed(2)} TL ödeme eklendi ($paymentType)');
+        }
+      } else if (kazaId != null) {
+        final totalTarget = (m['TOTAL_TARGET'] as num?)?.toDouble() ?? 0.0;
+        final totalPaid = (m['TOTAL_PAID'] as num?)?.toDouble() ?? 0.0;
+        final kalan = totalTarget - totalPaid;
+        if (kalan > 0) {
+          await _repo.add(kazaId: kazaId, tutar: kalan, tur: 'Kaza', tipi: paymentType);
+          _sn('Kaza için ${kalan.toStringAsFixed(2)} TL ödeme eklendi ($paymentType)');
+        }
+      }
+      await _load();
+    } catch (e) {
+      _err(e);
+    }
+  }
 
   void _sn(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
   void _err(Object e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red));
@@ -84,14 +158,58 @@ class _PaymentsPageState extends State<PaymentsPage> {
               final m = _items[i];
               final label = (m['ODEME_TURU'] ?? '-') as String;
               final tip = (m['ODEME_TIPI'] ?? '-') as String;
-              final tutar = (m['ODEME_TUTARI'] ?? '-') .toString();
+              final tutar = (m['ODEME_TUTARI'] as num?)?.toDouble() ?? 0.0;
               final status = _payStatus(m);
-              final color = _statusColor(status);
+              final statusColor = _statusColor(status);
+              
+              // Kalan tutar hesapla
+              final totalTarget = (m['TOTAL_TARGET'] as num?)?.toDouble();
+              final totalPaid = (m['TOTAL_PAID'] as num?)?.toDouble() ?? 0.0;
+              final hasUnpaid = totalTarget != null && totalPaid < totalTarget;
+              final kalan = totalTarget != null ? totalTarget - totalPaid : 0.0;
+              
               return Card(child: ListTile(
-                leading: const Icon(Icons.payments),
+                leading: Icon(_statusIcon(status), color: statusColor, size: 32),
                 title: Text('Ödeme#${m['ODEME_ID']} • ${m['PLAKA'] ?? '-'} • ${m['Marka'] ?? '-'} ${m['Model'] ?? ''}'),
-                subtitle: Text('Tür: $label • Tip: $tip • Tutar: $tutar'),
-                trailing: Chip(label: Text(status), backgroundColor: color.withOpacity(0.1), labelStyle: TextStyle(color: color)),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Tür: $label • Tip: $tip • Tutar: ${tutar.toStringAsFixed(2)} TL'),
+                    Row(children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: statusColor),
+                        ),
+                        child: Text(
+                          status == 'Yok' ? 'ÖDENMEDİ' : status.toUpperCase(),
+                          style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ),
+                      if (totalTarget != null) ...[
+                        const SizedBox(width: 8),
+                        Text('Hedef: ${totalTarget.toStringAsFixed(2)} TL', style: const TextStyle(fontSize: 12)),
+                        const SizedBox(width: 8),
+                        Text('Toplam: ${totalPaid.toStringAsFixed(2)} TL', style: const TextStyle(fontSize: 12)),
+                        if (kalan > 0) ...[
+                          const SizedBox(width: 8),
+                          Text('Kalan: ${kalan.toStringAsFixed(2)} TL', style: TextStyle(fontSize: 12, color: Colors.red.shade700, fontWeight: FontWeight.bold)),
+                        ],
+                      ],
+                    ]),
+                  ],
+                ),
+                trailing: Wrap(spacing: 6, children: [
+                  OutlinedButton.icon(onPressed: () => _fill(m), icon: const Icon(Icons.edit, size: 18), label: const Text('Düzenle')),
+                  if (hasUnpaid && kalan > 0)
+                    FilledButton.icon(
+                      onPressed: () => _makePayment(m),
+                      icon: const Icon(Icons.payments, size: 18),
+                      label: const Text('Öde'),
+                    ),
+                ]),
                 onTap: () => _fill(m),
               ));
             },

@@ -64,6 +64,8 @@ class _CustomersPageState extends State<CustomersPage> {
         tel: fTel.text.trim(),
         email: fEmail.text.trim(),
         adres: fAdres.text.trim().isEmpty ? null : fAdres.text.trim(),
+        subeId: Session().current?.subeId,
+        calisanId: Session().current?.calisanId,
       );
       _clear(); await _load();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Müşteri eklendi')));
@@ -79,6 +81,8 @@ class _CustomersPageState extends State<CustomersPage> {
         email: fEmail.text.trim().isEmpty ? null : fEmail.text.trim(),
         adres: fAdres.text.trim().isEmpty ? null : fAdres.text.trim(),
         durum: fDurum.text.trim().isEmpty ? null : fDurum.text.trim(),
+        subeId: Session().current?.subeId,
+        calisanId: Session().current?.calisanId,
       );
       await _load();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Müşteri güncellendi')));
@@ -88,7 +92,11 @@ class _CustomersPageState extends State<CustomersPage> {
   Future<void> _delete() async {
     if (_selected == null) return;
     try {
-      await _repo.deleteSoft(_selected!['MUSTERI_ID'] as int);
+      await _repo.deleteSoft(
+        _selected!['MUSTERI_ID'] as int,
+        subeId: Session().current?.subeId,
+        calisanId: Session().current?.calisanId,
+      );
       _clear(); await _load();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Müşteri silindi (soft)')));
     } catch (e) { if (mounted) _err(e); }
