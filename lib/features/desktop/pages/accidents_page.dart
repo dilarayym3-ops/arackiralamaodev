@@ -4,6 +4,7 @@ import '../../../data/repositories/rental_repository.dart' as rent;
 import '../../../data/repositories/payment_repository.dart' as pay;
 import '../../../models/session.dart';
 import '../../../widgets/search_select_dialog.dart';
+import '../../../widgets/payment_type_dialog.dart';
 
 class AccidentsPage extends StatefulWidget {
   const AccidentsPage({super.key});
@@ -179,10 +180,19 @@ class _AccidentsPageState extends State<AccidentsPage> {
       return;
     }
 
+    // Ödeme tipi seç
+    final paymentType = await PaymentTypeDialog.show(
+      context: context,
+      title: 'Ödeme Tipi Seçin',
+      message: 'Kalan tutar: ${kalan.toStringAsFixed(2)} TL',
+    );
+    
+    if (paymentType == null) return; // İptal edildi
+
     try {
-      await _payRepo.add(kazaId:  kazaId, tutar: kalan, tur: 'Kaza', tipi: 'Nakit');
+      await _payRepo.add(kazaId: kazaId, tutar: kalan, tur: 'Kaza', tipi: paymentType);
       await _load();
-      _sn('Kaza icin ${kalan. toStringAsFixed(2)} TL odeme eklendi');
+      _sn('Kaza icin ${kalan.toStringAsFixed(2)} TL odeme eklendi ($paymentType)');
     } catch (e) {
       _err(e);
     }
@@ -191,19 +201,23 @@ class _AccidentsPageState extends State<AccidentsPage> {
   Color _getStatusColor(String status) {
     switch (status) {
       case 'Odendi':
-        return Colors.green;
+      case 'Ödendi':
+        return const Color(0xFF4CAF50); // Yeşil
       case 'Kismi':
-        return Colors.orange;
+      case 'Kısmi':
+        return const Color(0xFFFF9800); // Turuncu
       default:
-        return Colors.red;
+        return const Color(0xFFF44336); // Kırmızı
     }
   }
 
   IconData _getStatusIcon(String status) {
     switch (status) {
       case 'Odendi':
+      case 'Ödendi':
         return Icons.check_circle;
       case 'Kismi':
+      case 'Kısmi':
         return Icons.hourglass_bottom;
       default:
         return Icons.cancel;

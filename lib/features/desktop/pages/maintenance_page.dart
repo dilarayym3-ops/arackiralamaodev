@@ -4,6 +4,7 @@ import '../../../data/repositories/car_repository.dart';
 import '../../../data/repositories/payment_repository.dart' as pay;
 import '../../../models/session.dart';
 import '../../../widgets/search_select_dialog.dart';
+import '../../../widgets/payment_type_dialog.dart';
 import '../../../models/ui_router.dart';
 
 class MaintenancePage extends StatefulWidget { const MaintenancePage({super.key}); @override State<MaintenancePage> createState() => _MaintenancePageState(); }
@@ -111,13 +112,34 @@ class _MaintenancePageState extends State<MaintenancePage> {
   }
 
   Future<void> _quickPay() async {
+    if (_selected == null) { _sn('Önce bir bakım kaydı seçin'); return; }
+    
     final ucret = double.tryParse(fUcret.text);
     if (ucret == null || ucret <= 0) { _sn('Bakım ücreti yok'); return; }
+    
+    final paid = (_selected?['PAID_TOTAL'] as num?)?.toDouble() ?? 0.0;
+    final kalan = ucret - paid;
+    
+    if (kalan <= 0) {
+      _sn('Bu bakım zaten tamamen ödenmiş');
+      return;
+    }
+    
+    // Ödeme tipi seç
+    final paymentType = await PaymentTypeDialog.show(
+      context: context,
+      title: 'Ödeme Tipi Seçin',
+      message: 'Kalan tutar: ${kalan.toStringAsFixed(2)} TL',
+    );
+    
+    if (paymentType == null) return; // İptal edildi
+    
     try {
-      await _payRepo.add(bakimId: _selected?['BAKIM_ID'] as int?, tutar: ucret, tur: 'Bakım', tipi: 'Nakit');
-      UiRouter().go(11, max: 15);
-      _sn('Bakım için ödeme eklendi');
+      await _payRepo.add(bakimId: _selected?['BAKIM_ID'] as int?, tutar: kalan, tur: 'Bakım', tipi: paymentType);
+      UiRouter().go(11, max: 16);
+      _sn('Bakım için ${kalan.toStringAsFixed(2)} TL ödeme eklendi ($paymentType)');
       await _refreshSelectedCarList();
+      await _load();
     } catch (e) { _err(e); }
   }
 
@@ -131,9 +153,15 @@ class _MaintenancePageState extends State<MaintenancePage> {
   }
 
   Color _statusColor(String s) {
-    if (s == 'Ödendi') return Colors.green;
-    if (s == 'Kısmi') return Colors.orange;
-    return Colors.red;
+    if (s == 'Ödendi') return const Color(0xFF4CAF50); // Yeşil
+    if (s == 'Kısmi') return const Color(0xFFFF9800); // Turuncu
+    return const Color(0xFFF44336); // Kırmızı
+  }
+
+  IconData _statusIcon(String s) {
+    if (s == 'Ödendi') return Icons.check_circle;
+    if (s == 'Kısmi') return Icons.hourglass_bottom;
+    return Icons.cancel;
   }
 
   Future<List<Map<String, dynamic>>> _itemsWithPaymentStatus(List<Map<String, dynamic>> src) async {
@@ -182,17 +210,52 @@ class _MaintenancePageState extends State<MaintenancePage> {
                 itemBuilder: (_, i) {
                   final m = list[i];
                   final status = (m['PAY_STATUS'] ?? 'Yok') as String;
-                  final color = _statusColor(status);
+                  final statusColor = _statusColor(status);
                   final paid = (m['PAID_TOTAL'] as num?)?.toDouble() ?? 0.0;
+                  final ucret = (m['BAKIM_UCRETI'] as num?)?.toDouble() ?? 0.0;
+                  final kalan = ucret - paid;
+                  
                   return Card(child: ListTile(
-                    leading: const Icon(Icons.build),
+                    leading: Icon(_statusIcon(status), color: statusColor, size: 32),
                     title: Text('Bakım#${m['BAKIM_ID']} • ${m['PLAKA'] ?? '-'} • ${m['Marka'] ?? '-'} ${m['Seri'] ?? ''} ${m['Model'] ?? ''}'),
-                    subtitle: Text('Tarih: ${m['BAKIM_TARIHI']} • Tür: ${m['BAKIM_TURU'] ?? '-'} • Ücret: ${m['BAKIM_UCRETI'] ?? '-'} • Ödenen: ${paid.toStringAsFixed(2)}'),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Tarih: ${m['BAKIM_TARIHI']} • Tür: ${m['BAKIM_TURU'] ?? '-'} • Ücret: ${ucret.toStringAsFixed(2)} TL'),
+                        Row(children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: statusColor),
+                            ),
+                            child: Text(
+                              status == 'Yok' ? 'ÖDENMEDİ' : status.toUpperCase(),
+                              style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text('Ödenen: ${paid.toStringAsFixed(2)} TL', style: const TextStyle(fontSize: 12)),
+                          if (kalan > 0) ...[
+                            const SizedBox(width: 8),
+                            Text('Kalan: ${kalan.toStringAsFixed(2)} TL', style: TextStyle(fontSize: 12, color: Colors.red.shade700, fontWeight: FontWeight.bold)),
+                          ],
+                        ]),
+                      ],
+                    ),
                     trailing: Wrap(spacing: 6, runSpacing: 6, children: [
-                      Chip(label: Text(status), backgroundColor: color.withOpacity(0.1), labelStyle: TextStyle(color: color)),
-                      OutlinedButton.icon(onPressed: () => _fill(m), icon: const Icon(Icons.edit), label: const Text('Düzenle')),
-                      FilledButton.icon(onPressed: () { _fill(m); _quickPay(); }, icon: const Icon(Icons.payments), label: const Text('Öde')),
-                      OutlinedButton.icon(onPressed: () { _fill(m); _delete(); }, icon: const Icon(Icons.delete), label: const Text('Sil')),
+                      OutlinedButton.icon(onPressed: () => _fill(m), icon: const Icon(Icons.edit, size: 18), label: const Text('Düzenle')),
+                      if (kalan > 0)
+                        FilledButton.icon(
+                          onPressed: () { 
+                            _fill(m);
+                            _quickPay();
+                          },
+                          icon: const Icon(Icons.payments, size: 18),
+                          label: const Text('Öde'),
+                        ),
+                      OutlinedButton.icon(onPressed: () { _fill(m); _delete(); }, icon: const Icon(Icons.delete, size: 18), label: const Text('Sil')),
                     ]),
                     onTap: () => _fill(m),
                   ));

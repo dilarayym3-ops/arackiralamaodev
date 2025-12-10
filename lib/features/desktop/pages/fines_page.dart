@@ -172,11 +172,11 @@ class _FinesPageState extends State<FinesPage> {
   Color _getStatusColor(String status) {
     switch (status) {
       case 'Ödendi':
-        return Colors.green;
+        return const Color(0xFF4CAF50); // Yeşil
       case 'Kısmi':
-        return Colors. orange;
+        return const Color(0xFFFF9800); // Turuncu
       default:
-        return Colors.red;
+        return const Color(0xFFF44336); // Kırmızı
     }
   }
 

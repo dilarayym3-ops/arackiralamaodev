@@ -5,6 +5,7 @@ import '../../../data/repositories/car_repository.dart';
 import '../../../data/repositories/payment_repository.dart' as pay;
 import '../../../models/session.dart';
 import '../../../widgets/search_select_dialog.dart';
+import '../../../widgets/payment_type_dialog.dart';
 import '../../../models/ui_router.dart';
 
 class InsurancesPage extends StatefulWidget { const InsurancesPage({super.key}); @override State<InsurancesPage> createState() => _InsurancesPageState(); }
@@ -99,16 +100,57 @@ class _InsurancesPageState extends State<InsurancesPage> {
   }
 
   Future<void> _quickPay() async {
+    final sigId = _selected?['SIGORTA_ID'] as int?;
+    if (sigId == null) { _sn('Önce bir sigorta kaydı seçin'); return; }
+    
     final tutar = double.tryParse(fMaliyet.text);
     if (tutar == null || tutar <= 0) { _sn('Maliyet tutarı yok'); return; }
+    
+    final paid = (_selected?['PAID_TOTAL'] as num?)?.toDouble() ?? 0.0;
+    final kalan = tutar - paid;
+    
+    if (kalan <= 0) {
+      _sn('Bu sigorta zaten tamamen ödenmiş');
+      return;
+    }
+    
+    // Ödeme tipi seç
+    final paymentType = await PaymentTypeDialog.show(
+      context: context,
+      title: 'Ödeme Tipi Seçin',
+      message: 'Kalan tutar: ${kalan.toStringAsFixed(2)} TL',
+    );
+    
+    if (paymentType == null) return; // İptal edildi
+    
     try {
-      final sigId = _selected?['SIGORTA_ID'] as int?;
-      if (sigId == null) { _sn('Önce bir sigorta kaydı seçin'); return; }
-      await _payRepo.add(tutar: tutar, tur: 'Sigorta', tipi: 'Nakit', sigortaId: sigId);
-      _sn('Sigorta için ödeme eklendi');
-      UiRouter().go(11, max: 15);
+      await _payRepo.add(tutar: kalan, tur: 'Sigorta', tipi: paymentType, sigortaId: sigId);
+      _sn('Sigorta için ${kalan.toStringAsFixed(2)} TL ödeme eklendi ($paymentType)');
+      UiRouter().go(11, max: 16);
       await _load();
     } catch (e) { _err(e); }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'Ödendi':
+        return const Color(0xFF4CAF50); // Yeşil
+      case 'Kısmi':
+        return const Color(0xFFFF9800); // Turuncu
+      default:
+        return const Color(0xFFF44336); // Kırmızı
+    }
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'Ödendi':
+        return Icons.check_circle;
+      case 'Kısmi':
+        return Icons.hourglass_bottom;
+      default:
+        return Icons.cancel;
+    }
   }
 
   void _sn(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
@@ -133,16 +175,51 @@ class _InsurancesPageState extends State<InsurancesPage> {
             itemBuilder: (_, i) {
               final m = _items[i];
               final status = (m['PAY_STATUS'] ?? 'Yok') as String;
-              final color = status == 'Ödendi' ? Colors.green : status == 'Kısmi' ? Colors.orange : Colors.red;
+              final statusColor = _getStatusColor(status);
               final paid = (m['PAID_TOTAL'] as num?)?.toDouble() ?? 0.0;
+              final maliyet = (m['MALIYET'] as num?)?.toDouble() ?? 0.0;
+              final kalan = maliyet - paid;
+              
               return Card(child: ListTile(
-                leading: Icon(((m['AKTIFMI'] ?? 0) == 1) ? Icons.local_police : Icons.gpp_bad, color: ((m['AKTIFMI'] ?? 0) == 1) ? Colors.green : Colors.orange),
+                leading: Icon(_getStatusIcon(status), color: statusColor, size: 32),
                 title: Text('Sigorta#${m['SIGORTA_ID']} • ${m['PLAKA']} • ${m['Marka']} ${m['Model']}'),
-                subtitle: Text('Ad: ${m['SIGORTA_ADI'] ?? '-'} • Kapsam: ${m['KAPSAM_TURU'] ?? '-'} • Maliyet: ${m['MALIYET'] ?? '-'} • Ödenen: ${paid.toStringAsFixed(2)}'),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Ad: ${m['SIGORTA_ADI'] ?? '-'} • Kapsam: ${m['KAPSAM_TURU'] ?? '-'} • Maliyet: ${maliyet.toStringAsFixed(2)} TL'),
+                    Row(children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: statusColor),
+                        ),
+                        child: Text(
+                          status == 'Yok' ? 'ÖDENMEDİ' : status.toUpperCase(),
+                          style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('Ödenen: ${paid.toStringAsFixed(2)} TL', style: const TextStyle(fontSize: 12)),
+                      if (kalan > 0) ...[
+                        const SizedBox(width: 8),
+                        Text('Kalan: ${kalan.toStringAsFixed(2)} TL', style: TextStyle(fontSize: 12, color: Colors.red.shade700, fontWeight: FontWeight.bold)),
+                      ],
+                    ]),
+                  ],
+                ),
                 trailing: Wrap(spacing: 6, children: [
-                  Chip(label: Text(status), backgroundColor: color.withOpacity(0.1), labelStyle: TextStyle(color: color)),
-                  OutlinedButton.icon(onPressed: () => setState(() => _selected = m), icon: const Icon(Icons.edit), label: const Text('Düzenle')),
-                  FilledButton.icon(onPressed: () { setState(() => _selected = m); _quickPay(); }, icon: const Icon(Icons.payments), label: const Text('Öde')),
+                  OutlinedButton.icon(onPressed: () => _fill(m), icon: const Icon(Icons.edit, size: 18), label: const Text('Düzenle')),
+                  if (kalan > 0)
+                    FilledButton.icon(
+                      onPressed: () { 
+                        _fill(m);
+                        _quickPay();
+                      },
+                      icon: const Icon(Icons.payments, size: 18),
+                      label: const Text('Öde'),
+                    ),
                 ]),
                 onTap: () => _fill(m),
               ));
