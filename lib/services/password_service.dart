@@ -9,6 +9,7 @@ class PasswordService {
   static const String _keyPassword2 = 'app_password_level2';
   static const String _defaultPassword1 = '0000';
   static const String _defaultPassword2 = '1234';
+  static const int minimumPasswordLength = 4;
 
   /// Şifre 1'i (Temel) yükle
   Future<String> getPassword1() async {

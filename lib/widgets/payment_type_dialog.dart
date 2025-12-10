@@ -78,6 +78,7 @@ class _PaymentTypeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
+      height: 48, // Accessibility: minimum touch target
       child: OutlinedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, color: color),

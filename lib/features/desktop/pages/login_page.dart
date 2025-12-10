@@ -76,8 +76,8 @@ class _LoginPageState extends State<LoginPage> {
       setState(() => _error = 'Yeni sifre giriniz');
       return;
     }
-    if (_newPassCtrl.text.trim().length < 4) {
-      setState(() => _error = 'Sifre en az 4 karakter olmali');
+    if (_newPassCtrl.text.trim().length < PasswordService.minimumPasswordLength) {
+      setState(() => _error = 'Sifre en az ${PasswordService.minimumPasswordLength} karakter olmali');
       return;
     }
     if (_newPassCtrl.text.trim() != _confirmPassCtrl.text.trim()) {

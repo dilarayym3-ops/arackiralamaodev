@@ -240,8 +240,8 @@ class _PasswordManagementPageState extends State<PasswordManagementPage> {
       return;
     }
 
-    if (_newPass1Ctrl.text.length < 4) {
-      setState(() => _error1 = 'Yeni şifre en az 4 karakter olmalı');
+    if (_newPass1Ctrl.text.length < PasswordService.minimumPasswordLength) {
+      setState(() => _error1 = 'Yeni şifre en az ${PasswordService.minimumPasswordLength} karakter olmalı');
       return;
     }
 
@@ -292,8 +292,8 @@ class _PasswordManagementPageState extends State<PasswordManagementPage> {
       return;
     }
 
-    if (_newPass2Ctrl.text.length < 4) {
-      setState(() => _error2 = 'Yeni şifre en az 4 karakter olmalı');
+    if (_newPass2Ctrl.text.length < PasswordService.minimumPasswordLength) {
+      setState(() => _error2 = 'Yeni şifre en az ${PasswordService.minimumPasswordLength} karakter olmalı');
       return;
     }
 
