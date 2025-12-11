@@ -1,21 +1,32 @@
 import 'package:flutter/material.dart';
 import '../../../data/repositories/customer_repository.dart';
+import '../../../data/repositories/logs_repository.dart';
+import '../../../models/session.dart';
+import '../../../services/password_service.dart';
 
 class CustomersPage extends StatefulWidget {
   const CustomersPage({super.key});
+
   @override
   State<CustomersPage> createState() => _CustomersPageState();
 }
 
 class _CustomersPageState extends State<CustomersPage> {
   final _repo = CustomerRepository();
+  final _logs = LogsRepository();
   final _q = TextEditingController();
 
   List<Map<String, dynamic>> _items = [];
+  List<Map<String, dynamic>> _filteredItems = [];
   Map<String, dynamic>? _selected;
   bool _loading = true;
-  String? _error;
+  bool _authorized = false;
+  String?  _error;
 
+  // Filtreler
+  String _filterDurum = 'Tümü';
+
+  // Form
   final fTc = TextEditingController();
   final fEhliyet = TextEditingController();
   final fAd = TextEditingController();
@@ -26,23 +37,55 @@ class _CustomersPageState extends State<CustomersPage> {
   final fDurum = TextEditingController(text: 'Aktif');
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    final ok = await PasswordService.showPasswordDialog(context, passwordLevel: 2, title: 'Müşteriler - Yönetici Şifresi');
+    if (ok) {
+      setState(() => _authorized = true);
+      _load();
+    } else {
+      setState(() => _authorized = false);
+    }
+  }
 
   Future<void> _load() async {
-    setState(() { _loading = true; _error = null; _selected = null; });
+    if (! _authorized) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+      _selected = null;
+    });
     try {
-      final all = await _repo.listAll(q: _q.text.trim().isEmpty ? null : _q.text.trim());
-      _items = all;
-    } catch (e) { _error = e.toString(); }
-    finally { setState(() => _loading = false); }
+      _items = await _repo.listAll(q: _q.text.trim().isEmpty ? null : _q.text.trim());
+      _applyFilters();
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  void _applyFilters() {
+    _filteredItems = _items.where((m) {
+      if (_filterDurum != 'Tümü') {
+        final durum = (m['DURUM'] ??  'Aktif').toString();
+        if (durum != _filterDurum) return false;
+      }
+      return true;
+    }).toList();
+    setState(() {});
   }
 
   void _fill(Map<String, dynamic> m) {
     setState(() => _selected = m);
     fTc.text = m['TC_NO'] ?? '';
     fEhliyet.text = m['EHLIYET_ID'] ?? '';
-    fAd.text = m['AD'] ?? '';
-    fSoyad.text = m['SOYAD'] ?? '';
+    fAd.text = m['AD'] ??  '';
+    fSoyad. text = m['SOYAD'] ?? '';
     fTel.text = m['TELEFON'] ?? '';
     fEmail.text = m['E-MAIL'] ?? '';
     fAdres.text = m['ADRES'] ?? '';
@@ -51,134 +94,355 @@ class _CustomersPageState extends State<CustomersPage> {
 
   void _clear() {
     setState(() => _selected = null);
-    fTc.clear(); fEhliyet.clear(); fAd.clear(); fSoyad.clear(); fTel.clear(); fEmail.clear(); fAdres.clear(); fDurum.text = 'Aktif';
+    fTc.clear();
+    fEhliyet.clear();
+    fAd.clear();
+    fSoyad.clear();
+    fTel.clear();
+    fEmail.clear();
+    fAdres.clear();
+    fDurum.text = 'Aktif';
   }
 
   Future<void> _create() async {
+    if (fTc.text.trim().isEmpty || fAd.text.trim().isEmpty || fSoyad.text.trim().isEmpty) {
+      _showError('TC, Ad ve Soyad zorunludur');
+      return;
+    }
     try {
       await _repo.create(
         tc: fTc.text.trim(),
         ehliyet: fEhliyet.text.trim(),
         ad: fAd.text.trim(),
-        soyad: fSoyad.text.trim(),
+        soyad: fSoyad. text.trim(),
         tel: fTel.text.trim(),
         email: fEmail.text.trim(),
-        adres: fAdres.text.trim().isEmpty ? null : fAdres.text.trim(),
-        subeId: Session().current?.subeId,
-        calisanId: Session().current?.calisanId,
+        adres: fAdres.text.trim().isEmpty ? null : fAdres. text.trim(),
       );
-      _clear(); await _load();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Müşteri eklendi')));
-    } catch (e) { if (mounted) _err(e); }
+      await _logs.add(
+        subeId: Session().current?. subeId ?? 0,
+        calisanId: Session().current?.calisanId,
+        action: 'Müşteri',
+        message: 'Müşteri eklendi:  ${fAd.text} ${fSoyad.text}',
+        details: {'tc': fTc.text, 'ad': fAd.text, 'soyad': fSoyad.text},
+        relatedType: 'MUSTERI',
+      );
+      _clear();
+      await _load();
+      _showSuccess('Müşteri eklendi');
+    } catch (e) {
+      _showError('Hata: $e');
+    }
   }
 
   Future<void> _update() async {
     if (_selected == null) return;
     try {
       await _repo.update(
-        id: _selected!['MUSTERI_ID'] as int,
-        tel: fTel.text.trim().isEmpty ? null : fTel.text.trim(),
-        email: fEmail.text.trim().isEmpty ? null : fEmail.text.trim(),
+        id: _selected! ['MUSTERI_ID'] as int,
+        tel: fTel.text.trim().isEmpty ? null : fTel. text.trim(),
+        email: fEmail.text.trim().isEmpty ? null : fEmail.text. trim(),
         adres: fAdres.text.trim().isEmpty ? null : fAdres.text.trim(),
-        durum: fDurum.text.trim().isEmpty ? null : fDurum.text.trim(),
-        subeId: Session().current?.subeId,
+        durum: fDurum.text.trim().isEmpty ? null : fDurum.text. trim(),
+      );
+      await _logs.add(
+        subeId: Session().current?.subeId ?? 0,
         calisanId: Session().current?.calisanId,
+        action: 'Müşteri',
+        message: 'Müşteri güncellendi:  ${fAd.text} ${fSoyad.text}',
+        details: {'musteriId': _selected!['MUSTERI_ID']},
+        relatedType: 'MUSTERI',
+        relatedId: _selected!['MUSTERI_ID'] as int,
       );
       await _load();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Müşteri güncellendi')));
-    } catch (e) { if (mounted) _err(e); }
+      _showSuccess('Müşteri güncellendi');
+    } catch (e) {
+      _showError('Hata: $e');
+    }
   }
 
   Future<void> _delete() async {
     if (_selected == null) return;
     try {
-      await _repo.deleteSoft(
-        _selected!['MUSTERI_ID'] as int,
-        subeId: Session().current?.subeId,
+      await _repo.deleteSoft(_selected!['MUSTERI_ID'] as int);
+      await _logs.add(
+        subeId: Session().current?.subeId ?? 0,
         calisanId: Session().current?.calisanId,
+        action: 'Müşteri',
+        message: 'Müşteri silindi (soft)',
+        details: {'musteriId': _selected!['MUSTERI_ID']},
+        relatedType: 'MUSTERI',
+        relatedId: _selected!['MUSTERI_ID'] as int,
       );
-      _clear(); await _load();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Müşteri silindi (soft)')));
-    } catch (e) { if (mounted) _err(e); }
+      _clear();
+      await _load();
+      _showSuccess('Müşteri silindi');
+    } catch (e) {
+      _showError('Hata: $e');
+    }
   }
 
-  void _err(Object e) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red));
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+  }
+
+  void _showSuccess(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(flex: 2, child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(children: [
-            Expanded(child: TextField(
-              controller: _q,
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Ad/Soyad/E-Mail/TC ara', border: OutlineInputBorder()),
-              onSubmitted: (_) => _load(),
-            )),
-            const SizedBox(width: 8),
-            FilledButton(onPressed: _load, child: const Text('Ara')),
-            const SizedBox(width: 8),
-            OutlinedButton(onPressed: () { _q.clear(); _load(); }, child: const Text('Temizle')),
-          ]),
+    if (! _authorized) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.lock, size: 64, color: Colors.grey),
+            const SizedBox(height:  16),
+            const Text('Bu sayfaya erişim için yönetici şifresi gereklidir. '),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _checkAuth,
+              icon: const Icon(Icons.lock_open),
+              label: const Text('Şifre Gir'),
+            ),
+          ],
         ),
+      );
+    }
+
+    return Row(
+      children: [
+        // Sol Panel - Liste
         Expanded(
-          child: _loading ? const Center(child: CircularProgressIndicator())
-            : _error != null ? Center(child: Text('Hata: $_error'))
-            : ListView.separated(
+          flex: 2,
+          child: Column(
+            children: [
+              // Arama ve Filtreler
+              Padding(
                 padding: const EdgeInsets.all(12),
-                itemCount: _items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (_, i) {
-                  final m = _items[i];
-                  return ListTile(
-                    tileColor: (_selected?['MUSTERI_ID'] == m['MUSTERI_ID']) ? Colors.indigo.withOpacity(.08) : null,
-                    leading: const Icon(Icons.person),
-                    title: Text('${m['AD'] ?? ''} ${m['SOYAD'] ?? ''}'),
-                    subtitle: Text('TC: ${m['TC_NO'] ?? ''} • Tel: ${m['TELEFON'] ?? ''} • ${m['E-MAIL'] ?? ''} • ${m['DURUM'] ?? ''}'),
-                    onTap: () => _fill(m),
-                  );
-                },
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _q,
+                            decoration: const InputDecoration(
+                              prefixIcon: Icon(Icons.search),
+                              hintText:  'Ad/Soyad/TC/E-Mail ara...',
+                              border: OutlineInputBorder(),
+                            ),
+                            onSubmitted: (_) => _load(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(onPressed: _load, child: const Text('Ara')),
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: () {
+                            _q.clear();
+                            _load();
+                          },
+                          child: const Text('Temizle'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Text('Durum:  ', style: TextStyle(fontWeight:  FontWeight.bold)),
+                        DropdownButton<String>(
+                          value: _filterDurum,
+                          items: ['Tümü', 'Aktif', 'Pasif', 'Silindi']
+                              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                              .toList(),
+                          onChanged: (v) {
+                            setState(() => _filterDurum = v ??  'Tümü');
+                            _applyFilters();
+                          },
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${_filteredItems.length} / ${_items.length} müşteri',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-        ),
-      ])),
-      const VerticalDivider(width: 1),
-      Expanded(child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_selected == null ? 'Müşteri Ekle' : 'Müşteri Düzenle', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          TextField(controller: fTc, decoration: const InputDecoration(labelText: 'TC', border: OutlineInputBorder())),
-          const SizedBox(height: 8),
-          TextField(controller: fEhliyet, decoration: const InputDecoration(labelText: 'Ehliyet No', border: OutlineInputBorder())),
-          const SizedBox(height: 8),
-          TextField(controller: fAd, decoration: const InputDecoration(labelText: 'Ad', border: OutlineInputBorder())),
-          const SizedBox(height: 8),
-          TextField(controller: fSoyad, decoration: const InputDecoration(labelText: 'Soyad', border: OutlineInputBorder())),
-          const SizedBox(height: 8),
-          TextField(controller: fTel, decoration: const InputDecoration(labelText: 'Telefon', border: OutlineInputBorder())),
-          const SizedBox(height: 8),
-          TextField(controller: fEmail, decoration: const InputDecoration(labelText: 'E-Mail', border: OutlineInputBorder())),
-          const SizedBox(height: 8),
-          TextField(controller: fAdres, maxLines: 2, decoration: const InputDecoration(labelText: 'Adres', border: OutlineInputBorder())),
-          const SizedBox(height: 8),
-          TextField(controller: fDurum, decoration: const InputDecoration(labelText: 'Durum', border: OutlineInputBorder())),
-          const SizedBox(height: 12),
-          Row(children: [
-            if (_selected == null)
-              FilledButton.icon(onPressed: _create, icon: const Icon(Icons.add), label: const Text('Ekle'))
-            else ...[
-              FilledButton.icon(onPressed: _update, icon: const Icon(Icons.save), label: const Text('Güncelle')),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(onPressed: _delete, icon: const Icon(Icons.delete), label: const Text('Sil (Soft)')),
-              const SizedBox(width: 8),
-              TextButton(onPressed: _clear, child: const Text('Yeni')),
+              // Liste
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                        ? Center(child: Text('Hata: $_error'))
+                        : ListView.separated(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: _filteredItems.length,
+                            separatorBuilder:  (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (_, i) {
+                              final m = _filteredItems[i];
+                              final durum = (m['DURUM'] ?? 'Aktif').toString();
+                              final durumColor = durum == 'Aktif'
+                                  ? Colors.green
+                                  : durum == 'Pasif'
+                                      ? Colors.orange
+                                      : Colors.red;
+                              return Card(
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: durumColor. withOpacity(0.1),
+                                    child: Icon(Icons.person, color: durumColor),
+                                  ),
+                                  title: Text('${m['AD'] ?? ''} ${m['SOYAD'] ?? ''}'),
+                                  subtitle:  Text(
+                                    'TC: ${m['TC_NO'] ?? ''} • Tel: ${m['TELEFON'] ?? ''}\n'
+                                    'E-Mail: ${m['E-MAIL'] ?? ''}',
+                                  ),
+                                  trailing:  Chip(
+                                    label: Text(durum, style: TextStyle(color: durumColor, fontSize: 11)),
+                                    backgroundColor: durumColor.withOpacity(0.1),
+                                  ),
+                                  isThreeLine: true,
+                                  onTap: () => _fill(m),
+                                ),
+                              );
+                            },
+                          ),
+              ),
             ],
-          ]),
-        ]),
-      )),
-    ]);
+          ),
+        ),
+        const VerticalDivider(width: 1),
+        // Sağ Panel - Form
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _selected == null ? 'Müşteri Ekle' : 'Müşteri Düzenle',
+                  style:  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: fTc,
+                  decoration: const InputDecoration(labelText: 'TC Kimlik No *', border: OutlineInputBorder()),
+                  maxLength: 11,
+                  enabled: _selected == null,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: fEhliyet,
+                  decoration: const InputDecoration(labelText: 'Ehliyet No *', border: OutlineInputBorder()),
+                  enabled: _selected == null,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: fAd,
+                        decoration: const InputDecoration(labelText: 'Ad *', border: OutlineInputBorder()),
+                        enabled: _selected == null,
+                      ),
+                    ),
+                    const SizedBox(width:  8),
+                    Expanded(
+                      child: TextField(
+                        controller: fSoyad,
+                        decoration: const InputDecoration(labelText: 'Soyad *', border: OutlineInputBorder()),
+                        enabled: _selected == null,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: fTel,
+                  decoration: const InputDecoration(labelText: 'Telefon', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: fEmail,
+                  decoration: const InputDecoration(labelText: 'E-Mail', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller:  fAdres,
+                  decoration: const InputDecoration(labelText: 'Adres', border: OutlineInputBorder()),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: ['Aktif', 'Pasif', 'Silindi'].contains(fDurum.text) ? fDurum.text :  'Aktif',
+                  items: ['Aktif', 'Pasif', 'Silindi']
+                      .map((e) => DropdownMenuItem(value:  e, child: Text(e)))
+                      .toList(),
+                  onChanged: (v) => setState(() => fDurum.text = v ?? 'Aktif'),
+                  decoration: const InputDecoration(labelText: 'Durum', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing:  8,
+                  children:  [
+                    if (_selected == null)
+                      FilledButton. icon(
+                        onPressed:  _create,
+                        icon:  const Icon(Icons.add),
+                        label: const Text('Ekle'),
+                      )
+                    else ...[
+                      FilledButton. icon(
+                        onPressed:  _update,
+                        icon:  const Icon(Icons.save),
+                        label: const Text('Güncelle'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _delete,
+                        icon: const Icon(Icons.delete),
+                        label: const Text('Sil'),
+                      ),
+                      TextButton(onPressed: _clear, child: const Text('Yeni Müşteri')),
+                    ],
+                  ],
+                ),
+                if (_selected != null) ...[
+                  const Divider(height: 32),
+                  Text('Müşteri Detayları', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  _buildDetailRow('Müşteri ID', '${_selected!['MUSTERI_ID']}'),
+                  _buildDetailRow('TC', '${_selected!['TC_NO'] ?? '-'}'),
+                  _buildDetailRow('Ehliyet', '${_selected!['EHLIYET_ID'] ?? '-'}'),
+                  _buildDetailRow('Ad Soyad', '${_selected!['AD'] ?? ''} ${_selected!['SOYAD'] ?? ''}'),
+                  _buildDetailRow('Telefon', '${_selected! ['TELEFON'] ?? '-'}'),
+                  _buildDetailRow('E-Mail', '${_selected!['E-MAIL'] ?? '-'}'),
+                  _buildDetailRow('Adres', '${_selected!['ADRES'] ?? '-'}'),
+                  _buildDetailRow('Kayıt Tarihi', '${_selected!['KAYIT_TARIHI'] ?? '-'}'),
+                  _buildDetailRow('Durum', '${_selected!['DURUM'] ?? 'Aktif'}'),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 100, child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.bold))),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
   }
 }

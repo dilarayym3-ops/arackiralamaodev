@@ -1,6 +1,7 @@
 import '../db/mssql_service.dart';
 import '../../models/session.dart';
 import '../../models/role.dart';
+import '../../security/acl.dart';
 
 class AuthRepository {
   final _db = MssqlService();

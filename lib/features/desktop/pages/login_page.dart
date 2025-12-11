@@ -19,7 +19,6 @@ class _LoginPageState extends State<LoginPage> {
   final _subeRepo = SubeRepository();
   final _empRepo = EmployeeRepository();
   final _authRepo = AuthRepository();
-  final _passwordService = PasswordService();
 
   final _passCtrl = TextEditingController();
   final _newPassCtrl = TextEditingController();
@@ -28,7 +27,7 @@ class _LoginPageState extends State<LoginPage> {
   Map<String, dynamic>? _selSube;
   Map<String, dynamic>? _selEmp;
   bool _loading = false;
-  String?  _error;
+  String? _error;
   bool _showPassword = false;
 
   bool _needsSetup = false;
@@ -41,54 +40,50 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _loadPassword() async {
-    final isDefault = await _passwordService.isPassword1Default();
+    final isDefault = await PasswordService.isPassword1Default();
     setState(() {
       _needsSetup = isDefault;
     });
   }
 
-  Future<void> _savePassword(String pass) async {
-    await _passwordService.setPassword1(pass);
-    setState(() {
-      _needsSetup = false;
-      _passVerified = true;
-    });
-  }
-
   Future<void> _verifyPassword() async {
     if (_passCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Sifre giriniz');
+      setState(() => _error = 'Şifre giriniz');
       return;
     }
-    final isValid = await _passwordService.verifyPassword1(_passCtrl.text.trim());
+    final isValid = await PasswordService.verifyPassword1(_passCtrl.text.trim());
     if (isValid) {
       setState(() {
         _passVerified = true;
         _error = null;
       });
     } else {
-      setState(() => _error = 'Sifre yanlis');
+      setState(() => _error = 'Şifre yanlış');
     }
   }
 
   Future<void> _setupPassword() async {
     if (_newPassCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Yeni sifre giriniz');
+      setState(() => _error = 'Yeni şifre giriniz');
       return;
     }
-    if (_newPassCtrl.text.trim().length < PasswordService.minimumPasswordLength) {
-      setState(() => _error = 'Sifre en az ${PasswordService.minimumPasswordLength} karakter olmali');
+    if (_newPassCtrl.text.trim().length < 4) {
+      setState(() => _error = 'Şifre en az 4 karakter olmalı');
       return;
     }
     if (_newPassCtrl.text.trim() != _confirmPassCtrl.text.trim()) {
-      setState(() => _error = 'Sifreler eslesmiyor');
+      setState(() => _error = 'Şifreler eşleşmiyor');
       return;
     }
-    await _savePassword(_newPassCtrl.text.trim());
-    setState(() => _error = null);
+    await PasswordService.setPassword1(_newPassCtrl.text.trim());
+    setState(() {
+      _needsSetup = false;
+      _passVerified = true;
+      _error = null;
+    });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sifre basariyla olusturuldu')),
+        const SnackBar(content: Text('Şifre başarıyla oluşturuldu')),
       );
     }
   }
@@ -96,12 +91,12 @@ class _LoginPageState extends State<LoginPage> {
   Future<Map<String, dynamic>?> _pickSube() {
     return SearchSelectDialog.show(
       context,
-      title: 'Sube Sec',
+      title: 'Şube Seç',
       loader: (q) async {
         final rows = await _subeRepo.getAll();
         final term = q.toLowerCase();
         return rows.where((s) =>
-          (s['SUBE_ADI'] ??  '').toString().toLowerCase().contains(term) ||
+          (s['SUBE_ADI'] ?? '').toString().toLowerCase().contains(term) ||
           (s['IL'] ?? '').toString().toLowerCase().contains(term) ||
           (s['ILCE'] ?? '').toString().toLowerCase().contains(term)
         ).toList();
@@ -112,25 +107,25 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<Map<String, dynamic>?> _pickEmployee() {
-    final subeId = _selSube? ['SUBE_ID'] as int? ;
+    final subeId = _selSube?['SUBE_ID'] as int?;
     if (subeId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Once sube secin')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Önce şube seçin')));
       return Future.value(null);
     }
     return SearchSelectDialog.show(
       context,
-      title: 'Calisan Sec',
-      loader: (q) async => await _empRepo.listBySube(subeId, q:  q),
+      title: 'Çalışan Seç',
+      loader: (q) async => await _empRepo.listBySube(subeId, q: q),
       itemTitle: (e) => '${e['AD'] ?? ''} ${e['SOYAD'] ?? ''}',
       itemSubtitle: (e) => '${e['E-MAIL'] ?? ''} - ${e['POZISYON'] ?? ''}',
     );
   }
 
   Future<void> _login() async {
-    final subeId = _selSube? ['SUBE_ID'] as int?;
+    final subeId = _selSube?['SUBE_ID'] as int?;
     final empId = _selEmp?['CALISAN_ID'] as int?;
     if (subeId == null || empId == null) {
-      setState(() => _error = 'Sube ve calisan secmelisiniz');
+      setState(() => _error = 'Şube ve çalışan seçmelisiniz');
       return;
     }
     setState(() {
@@ -138,13 +133,13 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
     try {
-      final user = await _authRepo.loginWithCalisanId(subeId:  subeId, calisanId: empId);
+      final user = await _authRepo.loginWithCalisanId(subeId: subeId, calisanId: empId);
       if (user == null) {
-        setState(() => _error = 'Giris basarisiz');
+        setState(() => _error = 'Giriş başarısız');
       } else {
         Session().current = user;
-        if (! mounted) return;
-        Navigator. of(context).pushReplacement(
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const HomeDashboardPage()),
         );
       }
@@ -166,10 +161,10 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar:  AppBar(
-        title: const Text('Arac Kiralama Sistemi'),
+      appBar: AppBar(
+        title: const Text('Araç Kiralama Sistemi'),
         actions: [
-          IconButton(tooltip: 'Cikis', onPressed: _exitApp, icon: const Icon(Icons.close)),
+          IconButton(tooltip: 'Çıkış', onPressed: _exitApp, icon: const Icon(Icons.close)),
         ],
       ),
       body: Center(
@@ -194,7 +189,7 @@ class _LoginPageState extends State<LoginPage> {
     if (_needsSetup) {
       return _buildSetupForm();
     }
-    if (! _passVerified) {
+    if (!_passVerified) {
       return _buildPasswordForm();
     }
     return _buildLoginForm();
@@ -206,20 +201,20 @@ class _LoginPageState extends State<LoginPage> {
       children: [
         const Icon(Icons.lock_open, size: 64, color: Colors.orange),
         const SizedBox(height: 16),
-        Text('Ilk Kurulum', style: Theme.of(context).textTheme.headlineSmall),
+        Text('İlk Kurulum', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
-        const Text('Uygulama sifresi henuz belirlenmemis.  Lutfen yeni bir sifre olusturun.', textAlign: TextAlign.center),
+        const Text('Uygulama şifresi henüz belirlenmemiş. Lütfen yeni bir şifre oluşturun.', textAlign: TextAlign.center),
         const SizedBox(height: 24),
         TextField(
           controller: _newPassCtrl,
           obscureText: !_showPassword,
           decoration: InputDecoration(
-            labelText: 'Yeni Sifre',
+            labelText: 'Yeni Şifre',
             border: const OutlineInputBorder(),
-            prefixIcon: const Icon(Icons. lock),
-            suffixIcon:  IconButton(
+            prefixIcon: const Icon(Icons.lock),
+            suffixIcon: IconButton(
               icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
-              onPressed: () => setState(() => _showPassword = ! _showPassword),
+              onPressed: () => setState(() => _showPassword = !_showPassword),
             ),
           ),
         ),
@@ -228,7 +223,7 @@ class _LoginPageState extends State<LoginPage> {
           controller: _confirmPassCtrl,
           obscureText: !_showPassword,
           decoration: const InputDecoration(
-            labelText: 'Sifre Tekrar',
+            labelText: 'Şifre Tekrar',
             border: OutlineInputBorder(),
             prefixIcon: Icon(Icons.lock_outline),
           ),
@@ -241,10 +236,10 @@ class _LoginPageState extends State<LoginPage> {
           ),
         SizedBox(
           width: double.infinity,
-          child: FilledButton. icon(
+          child: FilledButton.icon(
             onPressed: _setupPassword,
             icon: const Icon(Icons.check),
-            label: const Text('Sifre Olustur'),
+            label: const Text('Şifre Oluştur'),
           ),
         ),
       ],
@@ -257,14 +252,14 @@ class _LoginPageState extends State<LoginPage> {
       children: [
         const Icon(Icons.lock, size: 64, color: Colors.indigo),
         const SizedBox(height: 16),
-        Text('Uygulama Girisi', style: Theme.of(context).textTheme.headlineSmall),
+        Text('Uygulama Girişi', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 24),
         TextField(
           controller: _passCtrl,
-          obscureText: ! _showPassword,
+          obscureText: !_showPassword,
           autofocus: true,
           decoration: InputDecoration(
-            labelText: 'Sifre',
+            labelText: 'Şifre',
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.lock),
             suffixIcon: IconButton(
@@ -284,7 +279,7 @@ class _LoginPageState extends State<LoginPage> {
           width: double.infinity,
           child: FilledButton(
             onPressed: _verifyPassword,
-            child: const Text('Giris'),
+            child: const Text('Giriş'),
           ),
         ),
       ],
@@ -295,9 +290,9 @@ class _LoginPageState extends State<LoginPage> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.business, size: 64, color:  Colors.indigo),
+        const Icon(Icons.business, size: 64, color: Colors.indigo),
         const SizedBox(height: 16),
-        Text('Sube ve Calisan Secimi', style: Theme.of(context).textTheme.headlineSmall),
+        Text('Şube ve Çalışan Seçimi', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 24),
         SizedBox(
           width: double.infinity,
@@ -306,8 +301,8 @@ class _LoginPageState extends State<LoginPage> {
               final s = await _pickSube();
               if (s != null) setState(() => _selSube = s);
             },
-            icon:  const Icon(Icons.home_work),
-            label: Text(_selSube == null ? 'Sube Sec' : '${_selSube! ['SUBE_ADI']}'),
+            icon: const Icon(Icons.home_work),
+            label: Text(_selSube == null ? 'Şube Seç' : '${_selSube!['SUBE_ADI']}'),
           ),
         ),
         const SizedBox(height: 12),
@@ -319,22 +314,22 @@ class _LoginPageState extends State<LoginPage> {
               if (e != null) setState(() => _selEmp = e);
             },
             icon: const Icon(Icons.badge),
-            label: Text(_selEmp == null ? 'Calisan Sec' : '${_selEmp!['AD']} ${_selEmp!['SOYAD']}'),
+            label: Text(_selEmp == null ? 'Çalışan Seç' : '${_selEmp!['AD']} ${_selEmp!['SOYAD']}'),
           ),
         ),
         const SizedBox(height: 16),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Text(_error!, style:  const TextStyle(color: Colors. red)),
+            child: Text(_error!, style: const TextStyle(color: Colors.red)),
           ),
         SizedBox(
           width: double.infinity,
           child: FilledButton(
             onPressed: _loading ? null : _login,
             child: _loading
-                ? const SizedBox(height: 20, width: 20, child:  CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Giris Yap'),
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Giriş Yap'),
           ),
         ),
       ],

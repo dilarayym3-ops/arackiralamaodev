@@ -1,96 +1,101 @@
 import 'package:flutter/material.dart';
 
-/// Ödeme tipi seçim dialogu (Nakit / Kart / Havale)
-class PaymentTypeDialog {
-  /// Ödeme tipi seçimi için dialog göster
-  /// Returns: Seçilen ödeme tipi ('Nakit', 'Kart', 'Havale') veya null (iptal)
+class PaymentTypeDialog extends StatefulWidget {
+  final String title;
+  final String message;
+
+  const PaymentTypeDialog({
+    super.key,
+    required this.title,
+    required this.message,
+  });
+
+  // Sayfalardaki kullanım ile uyumlu: String? döndürür (Nakit/Kart/Havale)
   static Future<String?> show({
     required BuildContext context,
-    String? title,
-    String? message,
+    required String title,
+    required String message,
   }) async {
     return showDialog<String>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(title ?? 'Ödeme Tipi Seçin'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (message != null) ...[
-                Text(message),
-                const SizedBox(height: 16),
-              ],
-              const Text(
-                'Ödeme hangi yöntemle yapılacak?',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 16),
-              _PaymentTypeButton(
-                icon: Icons.money,
-                label: 'Nakit',
-                color: Colors.green,
-                onPressed: () => Navigator.of(context).pop('Nakit'),
-              ),
-              const SizedBox(height: 8),
-              _PaymentTypeButton(
-                icon: Icons.credit_card,
-                label: 'Kart',
-                color: Colors.blue,
-                onPressed: () => Navigator.of(context).pop('Kart'),
-              ),
-              const SizedBox(height: 8),
-              _PaymentTypeButton(
-                icon: Icons.account_balance,
-                label: 'Havale',
-                color: Colors.orange,
-                onPressed: () => Navigator.of(context).pop('Havale'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('İptal'),
-            ),
-          ],
-        );
-      },
+      builder: (_) => PaymentTypeDialog(title: title, message: message),
     );
   }
+
+  @override
+  State<PaymentTypeDialog> createState() => _PaymentTypeDialogState();
 }
 
-class _PaymentTypeButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onPressed;
-
-  const _PaymentTypeButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onPressed,
-  });
+class _PaymentTypeDialogState extends State<PaymentTypeDialog> {
+  String _selectedType = 'Nakit';
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48, // Accessibility: minimum touch target
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, color: color),
-        label: Text(
-          label,
-          style: TextStyle(color: color, fontSize: 16),
-        ),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          side: BorderSide(color: color, width: 2),
-        ),
+    return AlertDialog(
+      title: Row(
+        children: const [
+          Icon(Icons.payments, color: Colors.green),
+          SizedBox(width: 8),
+          // Başlık parametreden gelecek
+        ],
       ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(widget.message),
+          ),
+          const SizedBox(height: 16),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Ödeme Tipi Seçin:', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              _buildTypeChip('Nakit', Icons.money),
+              _buildTypeChip('Kart', Icons.credit_card),
+              _buildTypeChip('Havale', Icons.account_balance),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('İptal'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.of(context).pop(_selectedType),
+          icon: const Icon(Icons.check),
+          label: const Text('Seç'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTypeChip(String type, IconData icon) {
+    final selected = _selectedType == type;
+    return ChoiceChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: selected ? Colors.white : Colors.grey),
+          const SizedBox(width: 4),
+          Text(type),
+        ],
+      ),
+      selected: selected,
+      onSelected: (_) => setState(() => _selectedType = type),
+      selectedColor: Colors.green,
+      labelStyle: TextStyle(color: selected ? Colors.white : Colors.black),
     );
   }
 }
